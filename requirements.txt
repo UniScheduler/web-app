@@ -1,0 +1,10 @@
+flask
+flask-cors
+beautifulsoup4
+requests
+pandas
+python-dotenv
+reportlab
+matplotlib
+gunicorn
+google-genai
