@@ -59,10 +59,13 @@ class AIProcessor:
         self.current_key_index = (self.current_key_index + 1) % len(self.ai_config["api_keys"])
         self.current_api = self.ai_config["api_keys"][self.current_key_index]
         self.client = genai.Client(api_key=self.current_api)
-        print(f"Switched to API key index {self.current_key_index}")
+        print(f"Switched to API key index {self.current_key_index} (Total keys: {len(self.ai_config['api_keys'])})")
 
     def _is_quota_error(self, error_message):
         """Check if the error is a quota/rate limit error"""
+        error_str = str(error_message).lower()
+        
+        # Specific quota/rate limit indicators
         quota_indicators = [
             "quota",
             "rate limit",
@@ -70,7 +73,17 @@ class AIProcessor:
             "exceeded your current quota",
             "GenerateRequestsPerDayPerProjectPerModel"
         ]
-        return any(indicator.lower() in str(error_message).lower() for indicator in quota_indicators)
+        
+        # Service overload indicators (should trigger cooldown)
+        overload_indicators = [
+            "503",
+            "service unavailable",
+            "model is overloaded",
+            "try again later"
+        ]
+        
+        return (any(indicator in error_str for indicator in quota_indicators) or
+                any(indicator in error_str for indicator in overload_indicators))
 
     def _should_wait_for_cooldown(self):
         """Check if we should wait for cooldown period"""
@@ -79,6 +92,8 @@ class AIProcessor:
         
         now = datetime.datetime.now()
         time_since_quota_exhausted = now - self.last_quota_exhausted
+        
+        print(f"Cooldown check: quota_error_count={self.quota_error_count}, time_since={time_since_quota_exhausted.total_seconds():.0f}s")
         
         # First cooldown: 1 hour
         if not self.cooldown_1_hour_completed:
@@ -115,6 +130,14 @@ class AIProcessor:
         if self.quota_error_count == 1:
             self.cooldown_1_hour_completed = False
             self.cooldown_24_hour_completed = False
+
+    def _reset_cooldown_state(self):
+        """Reset cooldown state after successful processing"""
+        self.quota_error_count = 0
+        self.last_quota_exhausted = None
+        self.cooldown_1_hour_completed = False
+        self.cooldown_24_hour_completed = False
+        print("Cooldown state reset after successful processing")
 
     def _has_schedule_overlaps(self, response_dict):
         """Check if the generated schedule has time overlaps"""
@@ -405,7 +428,7 @@ BEFORE RETURNING ANY SCHEDULE:
                     else:
                         # All API keys exhausted, wait for cooldown
                         print("All API keys exhausted, entering cooldown period")
-                        return {"classes": [], "error": "QUOTA_EXHAUSTED", "message": "All API keys have exceeded quota limits"}
+                        return {"classes": [], "error": "QUOTA_EXHAUSTED", "message": "All API keys have exceeded quota limits. Please try again later."}
                 else:
                     # Non-quota error, try fallback model
                     retry_count += 1

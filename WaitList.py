@@ -61,7 +61,11 @@ class WaitList:
             json.dump([response.to_dict() for response in self.waitlist], f)
     
     def from_dict(self, data):
-        self.waitlist = [AIResponse.from_dict(response) for response in data]
+        self.waitlist = []
+        for response_data in data:
+            ai_response = AIResponse.__new__(AIResponse)  # Create instance without calling __init__
+            ai_response.from_dict(response_data)
+            self.waitlist.append(ai_response)
         return self
     
     def get_ai_processor_status(self):

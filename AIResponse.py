@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
+import re
 
 class AIResponse:
     def __init__(self, id, courses_requested, semester, preferences, email=None):
@@ -164,6 +165,21 @@ class AIResponse:
                 exam_cell = cells[12] if len(cells) > 12 else None
                 exam_code = exam_cell.find('a').text.strip() if exam_cell and exam_cell.find('a') else ""
                 
+                # Clean up the data - remove newlines, extra spaces, and non-breaking spaces
+                crn = re.sub(r'\s+', ' ', crn).strip()
+                course = re.sub(r'\s+', ' ', course).strip()
+                title = re.sub(r'\s+', ' ', title).strip()
+                schedule_type = re.sub(r'\s+', ' ', schedule_type).strip()
+                modality = re.sub(r'\s+', ' ', modality).strip()
+                cr_hrs = re.sub(r'\s+', ' ', cr_hrs).strip()
+                capacity = re.sub(r'\s+', ' ', capacity).strip()
+                instructor = re.sub(r'\s+', ' ', instructor).strip()
+                days = re.sub(r'\s+', ' ', days).strip()
+                begin_time = re.sub(r'\s+', ' ', begin_time).strip()
+                end_time = re.sub(r'\s+', ' ', end_time).strip()
+                location = re.sub(r'\s+', ' ', location).strip()
+                exam_code = re.sub(r'\s+', ' ', exam_code).strip()
+                
                 # Skip rows with invalid CRN or malformed data
                 if not crn or not crn.isdigit():
                     continue
@@ -174,6 +190,14 @@ class AIResponse:
                     'graduate students looking', 'to force/add', 'show all types',
                     'course number', 'course request number', 'display'
                 ]):
+                    continue
+                
+                # Skip rows with empty or invalid essential fields
+                if not course or not title or not schedule_type or not days or not begin_time or not end_time:
+                    continue
+                
+                # Skip rows where location contains malformed data (like extra CRN numbers)
+                if re.search(r'\d{5}\s*[A-Z]', location):
                     continue
                 
                 # Add the main course entry
@@ -213,6 +237,10 @@ class AIResponse:
         
         additional_times = []
         
+        # Clean the row text first
+        row_text = re.sub(r'\s+', ' ', row_text)  # Replace multiple spaces with single space
+        row_text = re.sub(r'\n+', ' ', row_text)  # Replace newlines with spaces
+        
         # Look for patterns like "* Additional Times *" followed by day/time info
         # Pattern: * Additional Times * followed by day, time, location
         pattern = r'\* Additional Times?\s*\*\s*([A-Z])\s+(\d{1,2}:\d{2}[AP]M)\s+(\d{1,2}:\d{2}[AP]M)\s+([A-Z0-9\s]+)'
@@ -220,21 +248,26 @@ class AIResponse:
         
         for match in matches:
             day, start_time, end_time, location = match
-            additional_times.append({
-                'CRN': crn,
-                'Course': course,
-                'Title': title,
-                'Schedule Type': 'Lab',  # Additional times are usually labs
-                'Modality': 'Face-to-Face Instruction',
-                'Credit Hours': '',
-                'Capacity': '',
-                'Instructor': instructor,
-                'Days': day.strip(),
-                'Begin Time': start_time.strip(),
-                'End Time': end_time.strip(),
-                'Location': location.strip(),
-                'Exam Code': ''
-            })
+            # Clean up the location - remove any extra text or numbers
+            location = re.sub(r'\d+\s*[A-Z]*\s*$', '', location).strip()
+            
+            # Only add if we have valid data
+            if day and start_time and end_time and location:
+                additional_times.append({
+                    'CRN': crn,
+                    'Course': course,
+                    'Title': title,
+                    'Schedule Type': 'Lab',  # Additional times are usually labs
+                    'Modality': 'Face-to-Face Instruction',
+                    'Credit Hours': '',
+                    'Capacity': '',
+                    'Instructor': instructor,
+                    'Days': day.strip(),
+                    'Begin Time': start_time.strip(),
+                    'End Time': end_time.strip(),
+                    'Location': location.strip(),
+                    'Exam Code': ''
+                })
         
         return additional_times
     

@@ -144,3 +144,4 @@ security_config.json
 ai_config*.json
 server_data/
 test*
+debug_logs.json
