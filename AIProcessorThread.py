@@ -145,6 +145,11 @@ class AIProcessorThread:
             # Check if we should wait for cooldown
             if self.ai_processor._should_wait_for_cooldown():
                 return True
+            
+            # Check if all API keys are exhausted
+            if (self.ai_processor.quota_error_count > 0 and 
+                self.ai_processor.last_quota_exhausted is not None):
+                return True
                 
             return False
         except:
@@ -172,10 +177,6 @@ class AIProcessorThread:
             
             # Store the AI response
             response.set_ai_response(ai_result)
-            
-            # Reset cooldown state if processing was successful
-            if isinstance(ai_result, dict) and 'classes' in ai_result and ai_result['classes']:
-                self.ai_processor._reset_cooldown_state()
             
             # Save the updated response
             self.waitlist.save()
@@ -212,25 +213,16 @@ class AIProcessorThread:
                 number = course.get('number', '')
                 prompt_parts.append(f"- {department}{number}")
             
-            # Add available course sections
+            # Add available course sections - use raw data without processing
             if response.course_timetable:
                 prompt_parts.append("\nAvailable Course Sections:")
+                
+                # Use the raw course timetable data directly
                 for course_code, course_data in response.course_timetable.items():
-                    if not course_data.empty:
+                    if course_data is not None and not course_data.empty:
                         prompt_parts.append(f"\n{course_code}:")
-                        # Filter out comment-heavy or malformed rows
-                        cleaned_data = self._clean_course_data(course_data)
-                        for _, section in cleaned_data.iterrows():
-                            prompt_parts.append(
-                                f"  CRN: {section['CRN']}, "
-                                f"Course: {section['Course']}, "
-                                f"Title: {section['Title']}, "
-                                f"Type: {section['Schedule Type']}, "
-                                f"Instructor: {section['Instructor']}, "
-                                f"Days: {section['Days']}, "
-                                f"Time: {section['Begin Time']} - {section['End Time']}, "
-                                f"Location: {section['Location']}"
-                            )
+                        # Just dump the raw data as CSV
+                        prompt_parts.append(course_data.to_csv(index=False))
             
             # Add preferences
             if response.preferences:
@@ -248,6 +240,7 @@ class AIProcessorThread:
             print(f"Error building AI prompt: {e}")
             return "Generate a schedule for the requested courses."
     
+
     def _clean_course_data(self, course_data):
         """Clean course data by removing comment-heavy and malformed rows"""
         import pandas as pd
@@ -259,15 +252,6 @@ class AIProcessorThread:
         # Create a copy to avoid modifying the original
         cleaned_data = course_data.copy()
         
-        # Clean up malformed data in each column
-        for col in cleaned_data.columns:
-            if cleaned_data[col].dtype == 'object':
-                # Remove newlines, extra spaces, and non-breaking spaces
-                cleaned_data[col] = cleaned_data[col].astype(str).str.replace(r'\n+', ' ', regex=True)
-                cleaned_data[col] = cleaned_data[col].str.replace(r'\u00a0', ' ', regex=True)  # Remove non-breaking spaces
-                cleaned_data[col] = cleaned_data[col].str.replace(r'\s+', ' ', regex=True)  # Replace multiple spaces with single space
-                cleaned_data[col] = cleaned_data[col].str.strip()
-        
         # Filter out rows that are likely comments or malformed data
         def is_valid_row(row):
             # Get all field values as strings
@@ -275,6 +259,7 @@ class AIProcessorThread:
             course = str(row.get('Course', '')).strip()
             title = str(row.get('Title', '')).strip()
             schedule_type = str(row.get('Schedule Type', '')).strip()
+            modality = str(row.get('Modality', '')).strip()
             instructor = str(row.get('Instructor', '')).strip()
             days = str(row.get('Days', '')).strip()
             begin_time = str(row.get('Begin Time', '')).strip()
@@ -283,13 +268,13 @@ class AIProcessorThread:
             exam_code = str(row.get('Exam Code', '')).strip()
             
             # Skip rows with exam code information (not needed for scheduling)
-            if exam_code and exam_code != '' and exam_code != 'nan':
+            if exam_code and exam_code != '':
                 return False
             
-            # Check if this is an "* Additional Times *" entry - these should be preserved
-            if ('* Additional Times *' in title or '* Additional Time *' in title or
-                '* Additional Times *' in schedule_type or '* Additional Time *' in schedule_type):
-                return True
+            # Skip malformed "* Additional Times *" entries
+            if (modality == '* Additional Times *' and 
+                (not course or not title or not schedule_type)):
+                return False
             
             # Skip rows that are clearly malformed or contain comments
             comment_indicators = [
@@ -308,36 +293,36 @@ class AIProcessorThread:
                     if indicator in field:
                         return False
             
-            # Check if CRN is a valid number (not empty, not '?', not a comment, not 'nan')
-            if not crn or crn == '?' or crn == 'nan' or not crn.isdigit():
+            # Check if CRN is a valid number (not empty, not '?', not a comment)
+            if not crn or crn == '?' or not crn.isdigit():
                 return False
             
-            # Check if Course field contains valid course info (not comments, not empty, not 'nan')
-            if not course or course == '' or course == 'nan' or len(course) > 20:
+            # Check if Course field contains valid course info (not comments)
+            if not course or course == '' or len(course) > 20:
                 return False
             
-            # Check if Title is not a comment and not too long (allow empty for additional times)
-            if len(title) > 100:
+            # Check if Title is not a comment and not too long
+            if not title or len(title) > 100:
                 return False
             
-            # Check if Schedule Type is valid (not empty, not comments, not 'nan')
-            if not schedule_type or schedule_type == 'nan' or len(schedule_type) > 20:
+            # Check if Schedule Type is valid (not empty, not comments)
+            if not schedule_type or len(schedule_type) > 20:
                 return False
             
-            # Check if Instructor field is not a long comment (allow N/A)
+            # Check if Instructor field is not a long comment
             if len(instructor) > 50:
                 return False
             
-            # Check if Days field contains valid day codes (not empty, not 'nan')
-            if not days or days == 'nan' or len(days) > 10:
+            # Check if Days field contains valid day codes
+            if not days or len(days) > 10:
                 return False
             
-            # Check if times are valid (not empty, not 'nan')
-            if not begin_time or not end_time or begin_time == 'nan' or end_time == 'nan' or len(begin_time) > 10 or len(end_time) > 10:
+            # Check if times are valid
+            if not begin_time or not end_time or len(begin_time) > 10 or len(end_time) > 10:
                 return False
             
-            # Check if location is reasonable (not empty, not 'nan')
-            if not location or location == 'nan' or len(location) > 100:
+            # Check if location is reasonable
+            if not location or len(location) > 50:
                 return False
             
             return True
@@ -349,10 +334,6 @@ class AIProcessorThread:
         # Remove exam code column if it exists
         if 'Exam Code' in cleaned_data.columns:
             cleaned_data = cleaned_data.drop('Exam Code', axis=1)
-        
-        # Remove duplicate rows based on CRN, Course, Days, Begin Time, End Time
-        if not cleaned_data.empty:
-            cleaned_data = cleaned_data.drop_duplicates(subset=['CRN', 'Course', 'Days', 'Begin Time', 'End Time'], keep='first')
         
         return cleaned_data
     
