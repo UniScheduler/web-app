@@ -9,6 +9,9 @@ import threading
 import logging
 import io
 import random
+import base64
+import hashlib
+import hmac
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
@@ -34,6 +37,7 @@ waitlist = None
 ai_processor = None
 server_folder = "server_data"
 config_file = None
+admin_credentials = None
 
 def initialize_server():
     """Initialize the server with waitlist and AI processor"""
@@ -46,6 +50,9 @@ def initialize_server():
     # Load AI config first
     ai_config = load_ai_config()
     
+    # Load admin credentials
+    load_admin_credentials()
+    
     # Initialize waitlist with AI config
     waitlist = WaitList(server_folder, ai_config)
     
@@ -53,6 +60,60 @@ def initialize_server():
     ai_processor = AIProcessor(ai_config)
     
     logger.info("Server initialized successfully")
+
+def load_admin_credentials():
+    """Load admin credentials from config"""
+    global admin_credentials
+    
+    try:
+        # Load config from file
+        with open(config_file, 'r') as f:
+            config = json.load(f)
+        
+        # Get admin credentials
+        admin_credentials = config.get('admin_credentials', {})
+        
+        if not admin_credentials.get('username') or not admin_credentials.get('password'):
+            logger.warning("Admin credentials not found in config file")
+            return False
+            
+        logger.info("Admin credentials loaded successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error loading admin credentials: {str(e)}")
+        return False
+
+def check_auth(username, password):
+    """Check if provided credentials are valid"""
+    if not admin_credentials:
+        return False
+    
+    # Simple string comparison (in production, use proper password hashing)
+    return (username == admin_credentials.get('username') and 
+            password == admin_credentials.get('password'))
+
+def authenticate():
+    """Check authentication for protected endpoints"""
+    auth = request.authorization
+    
+    if not auth or not check_auth(auth.username, auth.password):
+        return jsonify({'error': 'Authentication required'}), 401, {
+            'WWW-Authenticate': 'Basic realm="Admin Access Required"'
+        }
+    
+    return None
+
+def require_auth(f):
+    """Decorator to require authentication for endpoints"""
+    def decorated_function(*args, **kwargs):
+        auth_error = authenticate()
+        if auth_error:
+            return auth_error
+        return f(*args, **kwargs)
+    
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 def load_ai_config():
     """Load AI configuration from file or environment"""
@@ -71,19 +132,27 @@ def load_ai_config():
                 config_file = template_path
                 logger.info(f"Using template.json from current directory: {template_path}")
             else:
-                # Ask for config file path
-                config_file = input("Please provide the path to your AI config JSON file: ").strip()
+                # For gunicorn, we can't use input(), so try environment variable
+                config_file = os.environ.get('AI_CONFIG_FILE', 'template.json')
                 if not os.path.exists(config_file):
+                    logger.error(f"Config file not found: {config_file}")
                     raise FileNotFoundError(f"Config file not found: {config_file}")
     
     # Load config from file
-    with open(config_file, 'r') as f:
-        config = json.load(f)
+    try:
+        with open(config_file, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading config file {config_file}: {str(e)}")
+        raise
     
     # Copy config to waitlist folder for persistence
-    waitlist_config_path = os.path.join(server_folder, "ai_config.json")
-    with open(waitlist_config_path, 'w') as f:
-        json.dump(config, f, indent=2)
+    try:
+        waitlist_config_path = os.path.join(server_folder, "ai_config.json")
+        with open(waitlist_config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not save config to waitlist folder: {str(e)}")
     
     logger.info(f"AI config loaded from {config_file}")
     return config
@@ -462,8 +531,9 @@ def get_waitlist_status():
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/logs', methods=['GET'])
+@require_auth
 def get_logs():
-    """Get waitlist logs"""
+    """Get waitlist logs - Admin access required"""
     try:
         log_file = os.path.join(server_folder, "waitlist_logs.json")
         
@@ -482,6 +552,20 @@ def get_logs():
         logger.error(f"Error getting logs: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/api/admin/status', methods=['GET'])
+@require_auth
+def admin_status():
+    """Admin-only endpoint to check server status"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'waitlist_initialized': waitlist is not None,
+        'ai_processor_initialized': ai_processor is not None,
+        'admin_credentials_loaded': admin_credentials is not None,
+        'server_folder': server_folder,
+        'config_file': config_file
+    }), 200
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -492,10 +576,15 @@ def health_check():
         'ai_processor_initialized': ai_processor is not None
     }), 200
 
-if __name__ == '__main__':
-    # Initialize server
+# Initialize server when module is imported
+try:
     initialize_server()
-    
+    logger.info("Server initialization completed successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize server: {str(e)}")
+    # Don't fail completely, allow the app to start
+
+if __name__ == '__main__':
     # Start the Flask app
     port = int(os.environ.get('PORT', 8000))
     app.run(debug=False, host="0.0.0.0", port=port)
