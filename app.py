@@ -1,12 +1,3 @@
-from AIResponse import AIResponse
-from AIProcessor import AIProcessor
-from WaitList import WaitList
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt
 import os
 import json
 import time
@@ -18,8 +9,20 @@ import threading
 import logging
 import io
 import random
+import base64
+import hashlib
+import hmac
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from WaitList import WaitList
+from AIProcessor import AIProcessor
+from AIResponse import AIResponse
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -34,32 +37,88 @@ waitlist = None
 ai_processor = None
 server_folder = "server_data"
 config_file = None
-
+admin_credentials = None
 
 def initialize_server():
     """Initialize the server with waitlist and AI processor"""
     global waitlist, ai_processor, config_file
-
+    
     # Create server folder if it doesn't exist
     if not os.path.exists(server_folder):
         os.makedirs(server_folder)
-
+    
     # Load AI config first
     ai_config = load_ai_config()
-
+    
+    # Load admin credentials
+    load_admin_credentials()
+    
     # Initialize waitlist with AI config
     waitlist = WaitList(server_folder, ai_config)
-
+    
     # Initialize AI processor with config
     ai_processor = AIProcessor(ai_config)
-
+    
     logger.info("Server initialized successfully")
 
+def load_admin_credentials():
+    """Load admin credentials from config"""
+    global admin_credentials
+    
+    try:
+        # Load config from file
+        with open(config_file, 'r') as f:
+            config = json.load(f)
+        
+        # Get admin credentials
+        admin_credentials = config.get('admin_credentials', {})
+        
+        if not admin_credentials.get('username') or not admin_credentials.get('password'):
+            logger.warning("Admin credentials not found in config file")
+            return False
+            
+        logger.info("Admin credentials loaded successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error loading admin credentials: {str(e)}")
+        return False
+
+def check_auth(username, password):
+    """Check if provided credentials are valid"""
+    if not admin_credentials:
+        return False
+    
+    # Simple string comparison (in production, use proper password hashing)
+    return (username == admin_credentials.get('username') and 
+            password == admin_credentials.get('password'))
+
+def authenticate():
+    """Check authentication for protected endpoints"""
+    auth = request.authorization
+    
+    if not auth or not check_auth(auth.username, auth.password):
+        return jsonify({'error': 'Authentication required'}), 401, {
+            'WWW-Authenticate': 'Basic realm="Admin Access Required"'
+        }
+    
+    return None
+
+def require_auth(f):
+    """Decorator to require authentication for endpoints"""
+    def decorated_function(*args, **kwargs):
+        auth_error = authenticate()
+        if auth_error:
+            return auth_error
+        return f(*args, **kwargs)
+    
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 def load_ai_config():
     """Load AI configuration from file or environment"""
     global config_file
-
+    
     # Check if config file path is provided
     if not config_file:
         # Try to find config file in server folder
@@ -67,25 +126,36 @@ def load_ai_config():
         if os.path.exists(config_path):
             config_file = config_path
         else:
-            # Ask for config file path
-            config_file = input(
-                "Please provide the path to your AI config JSON file: ").strip()
-            if not os.path.exists(config_file):
-                raise FileNotFoundError(
-                    f"Config file not found: {config_file}")
-
+            # Check for template.json in current working directory
+            template_path = "template.json"
+            if os.path.exists(template_path):
+                config_file = template_path
+                logger.info(f"Using template.json from current directory: {template_path}")
+            else:
+                # For gunicorn, we can't use input(), so try environment variable
+                config_file = os.environ.get('AI_CONFIG_FILE', 'template.json')
+                if not os.path.exists(config_file):
+                    logger.error(f"Config file not found: {config_file}")
+                    raise FileNotFoundError(f"Config file not found: {config_file}")
+    
     # Load config from file
-    with open(config_file, 'r') as f:
-        config = json.load(f)
-
+    try:
+        with open(config_file, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading config file {config_file}: {str(e)}")
+        raise
+    
     # Copy config to waitlist folder for persistence
-    waitlist_config_path = os.path.join(server_folder, "ai_config.json")
-    with open(waitlist_config_path, 'w') as f:
-        json.dump(config, f, indent=2)
-
+    try:
+        waitlist_config_path = os.path.join(server_folder, "ai_config.json")
+        with open(waitlist_config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not save config to waitlist folder: {str(e)}")
+    
     logger.info(f"AI config loaded from {config_file}")
     return config
-
 
 def log_waitlist_event(event, data=None):
     """Log events to waitlist logs"""
@@ -94,34 +164,32 @@ def log_waitlist_event(event, data=None):
         "event": event,
         "data": data or {}
     }
-
-    log_file = os.path.join(server_folder, "server_logs.json")
-
+    
+    log_file = os.path.join(server_folder, "waitlist_logs.json")
+    
     # Load existing logs
     if os.path.exists(log_file):
         with open(log_file, 'r') as f:
             logs = json.load(f)
     else:
         logs = []
-
+    
     # Add new log entry
     logs.append(log_entry)
-
+    
     # Keep only last 1000 entries
     if len(logs) > 1000:
         logs = logs[-1000:]
-
+    
     # Save logs
     with open(log_file, 'w') as f:
         json.dump(logs, f, indent=2)
-
+    
     logger.info(f"Waitlist event logged: {event}")
-
 
 def convert_to_24hr(time_str):
     """Convert time string from 12-hour format to 24-hour decimal format"""
     return datetime.strptime(time_str, "%I:%M%p").hour + datetime.strptime(time_str, "%I:%M%p").minute / 60
-
 
 def create_calendar_plot(classes, inputColors, filename):
     """Create a visual calendar plot of the schedule"""
@@ -188,7 +256,6 @@ def create_calendar_plot(classes, inputColors, filename):
     plt.savefig(filename)
     plt.close()
 
-
 def generate_schedule_pdf(schedule_data, inputColors):
     """Generate a PDF with the schedule data and calendar plot"""
     try:
@@ -225,17 +292,16 @@ def generate_schedule_pdf(schedule_data, inputColors):
 
         doc.build(elements)
         buffer.seek(0)
-
+        
         # Clean up the temporary file
         if os.path.exists(calendar_filename):
             os.remove(calendar_filename)
-
+        
         logger.info("PDF generated successfully")
         return buffer
     except Exception as e:
         logger.error(f"Error generating PDF: {str(e)}")
         raise
-
 
 @app.route('/api/submit_request', methods=['POST'])
 def submit_request():
@@ -246,11 +312,11 @@ def submit_request():
         preferences = data.get('preferences', '')
         term_year = data.get('term_year', '202501')
         email = data.get('email', '')
-
+        
         # Validate input
         if not courses:
             return jsonify({'error': 'No courses provided'}), 400
-
+        
         # Check if server is in cooldown mode
         if waitlist.is_ai_processing() and ai_processor._should_wait_for_cooldown():
             log_waitlist_event("request_rejected_cooldown", {
@@ -261,29 +327,27 @@ def submit_request():
                 'error': 'Service is currently in cooldown mode. Please try again later.',
                 'cooldown_mode': True
             }), 503
-
+        
         # Create new request
-        request_id = waitlist.new_request(
-            email, courses, preferences, term_year)
-
+        request_id = waitlist.new_request(email, courses, preferences, term_year)
+        
         log_waitlist_event("request_submitted", {
             "request_id": str(request_id),
             "email": email,
             "courses_count": len(courses),
             "term_year": term_year
         })
-
+        
         return jsonify({
             'request_id': str(request_id),
             'status': 'submitted',
             'message': 'Request submitted successfully. You can check status at /schedule/' + str(request_id)
         }), 200
-
+        
     except Exception as e:
         logger.error(f"Error submitting request: {str(e)}")
         log_waitlist_event("request_error", {"error": str(e)})
         return jsonify({'error': 'Internal server error'}), 500
-
 
 @app.route('/api/schedule/<request_id>', methods=['GET'])
 def get_schedule_status(request_id):
@@ -291,26 +355,26 @@ def get_schedule_status(request_id):
     try:
         # Convert string to UUID
         request_uuid = uuid.UUID(request_id)
-
+        
         # Get status from waitlist
         status = waitlist.get_status(request_uuid)
-
+        
         if status == "not found":
             return jsonify({'error': 'Request not found'}), 404
-
+        
         # Get response data
         response_data = waitlist.get_response(request_uuid)
-
+        
         # Check if server is in cooldown mode
         cooldown_mode = ai_processor._should_wait_for_cooldown() if ai_processor else False
-
+        
         result = {
             'request_id': request_id,
             'status': status,
             'cooldown_mode': cooldown_mode,
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
-
+        
         # Add progress information
         if status == "initiated":
             result['progress'] = {
@@ -357,33 +421,31 @@ def get_schedule_status(request_id):
                 'message': 'AI processing failed. Please try again.'
             }
             result['error'] = 'AI processing failed'
-
+        
         # Add timeline information
         result['timeline'] = get_request_timeline(request_uuid)
-
+        
         return jsonify(result), 200
-
+        
     except ValueError:
         return jsonify({'error': 'Invalid request ID format'}), 400
     except Exception as e:
         logger.error(f"Error getting schedule status: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-
 def get_request_timeline(request_uuid):
     """Get timeline of events for a request"""
     timeline = []
-
+    
     # Get logs for this request
-    log_file = os.path.join(server_folder, "server_logs.json")
+    log_file = os.path.join(server_folder, "waitlist_logs.json")
     if os.path.exists(log_file):
         with open(log_file, 'r') as f:
             logs = json.load(f)
-
+        
         # Filter logs for this request
-        request_logs = [log for log in logs if str(
-            request_uuid) in str(log.get('data', {}))]
-
+        request_logs = [log for log in logs if str(request_uuid) in str(log.get('data', {}))]
+        
         # Create timeline
         for log in request_logs:
             if log['event'] == 'request_submitted':
@@ -410,9 +472,8 @@ def get_request_timeline(request_uuid):
                     'event': 'Processing completed',
                     'description': 'Your schedule has been generated successfully'
                 })
-
+    
     return timeline
-
 
 @app.route('/api/download_schedule/<request_id>', methods=['POST'])
 def download_schedule(request_id):
@@ -420,38 +481,36 @@ def download_schedule(request_id):
     try:
         # Convert string to UUID
         request_uuid = uuid.UUID(request_id)
-
+        
         # Get schedule data
         schedule_data = waitlist.get_response(request_uuid)
-
+        
         if schedule_data == "processing" or schedule_data == "not found":
             return jsonify({'error': 'Schedule not ready or not found'}), 404
-
+        
         # Get colors from request
         colors = request.json.get('crnColors', {}) if request.json else {}
-
+        
         # Generate PDF using the new implementation
-        pdf_buffer = generate_schedule_pdf(
-            schedule_data.get('classes', []), colors)
-
+        pdf_buffer = generate_schedule_pdf(schedule_data.get('classes', []), colors)
+        
         log_waitlist_event("schedule_downloaded", {
             "request_id": str(request_uuid),
             "classes_count": len(schedule_data.get('classes', []))
         })
-
+        
         return send_file(
             pdf_buffer,
             as_attachment=True,
             download_name=f"schedule_{request_id}.pdf",
             mimetype='application/pdf'
         )
-
+        
     except ValueError:
         return jsonify({'error': 'Invalid request ID format'}), 400
     except Exception as e:
         logger.error(f"Error downloading schedule: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
-
 
 @app.route('/api/waitlist_status', methods=['GET'])
 def get_waitlist_status():
@@ -464,35 +523,48 @@ def get_waitlist_status():
             'queue_size': waitlist.get_queue_size(),
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
-
+        
         return jsonify(status), 200
-
+        
     except Exception as e:
         logger.error(f"Error getting waitlist status: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-
 @app.route('/api/logs', methods=['GET'])
+@require_auth
 def get_logs():
-    """Get waitlist logs"""
+    """Get waitlist logs - Admin access required"""
     try:
-        log_file = os.path.join(server_folder, "server_logs.json")
-
+        log_file = os.path.join(server_folder, "waitlist_logs.json")
+        
         if not os.path.exists(log_file):
             return jsonify({'logs': []}), 200
-
+        
         with open(log_file, 'r') as f:
             logs = json.load(f)
-
+        
         # Return last 100 entries
         logs = logs[-100:] if len(logs) > 100 else logs
-
+        
         return jsonify({'logs': logs}), 200
-
+        
     except Exception as e:
         logger.error(f"Error getting logs: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/api/admin/status', methods=['GET'])
+@require_auth
+def admin_status():
+    """Admin-only endpoint to check server status"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'waitlist_initialized': waitlist is not None,
+        'ai_processor_initialized': ai_processor is not None,
+        'admin_credentials_loaded': admin_credentials is not None,
+        'server_folder': server_folder,
+        'config_file': config_file
+    }), 200
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -504,11 +576,15 @@ def health_check():
         'ai_processor_initialized': ai_processor is not None
     }), 200
 
+# Initialize server when module is imported
+try:
+    initialize_server()
+    logger.info("Server initialization completed successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize server: {str(e)}")
+    # Don't fail completely, allow the app to start
 
 if __name__ == '__main__':
-    # Initialize server
-    initialize_server()
-
     # Start the Flask app
-    port = int(os.environ.get('PORT', 8001))
+    port = int(os.environ.get('PORT', 8000))
     app.run(debug=False, host="0.0.0.0", port=port)
