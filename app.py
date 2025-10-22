@@ -324,8 +324,9 @@ def submit_request():
                 "courses_count": len(courses)
             })
             return jsonify({
-                'error': 'Service is currently in cooldown mode. Please try again later.',
-                'cooldown_mode': True
+                'error': 'Service is currently overloaded. Please wait 1 hour and try again.',
+                'cooldown_mode': True,
+                'waitlist_mode': True
             }), 503
         
         # Create new request
@@ -367,11 +368,13 @@ def get_schedule_status(request_id):
         
         # Check if server is in cooldown mode
         cooldown_mode = ai_processor._should_wait_for_cooldown() if ai_processor else False
+        waitlist_mode = waitlist.on_waitlist if waitlist else False
         
         result = {
             'request_id': request_id,
             'status': status,
             'cooldown_mode': cooldown_mode,
+            'waitlist_mode': waitlist_mode,
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
@@ -516,11 +519,16 @@ def download_schedule(request_id):
 def get_waitlist_status():
     """Get overall waitlist status"""
     try:
+        cooldown_mode = ai_processor._should_wait_for_cooldown() if ai_processor else False
+        waitlist_mode = waitlist.on_waitlist if waitlist else False
+        
         status = {
             'total_requests': len(waitlist.get_waitlist()),
             'ai_processing': waitlist.is_ai_processing(),
-            'cooldown_mode': ai_processor._should_wait_for_cooldown() if ai_processor else False,
+            'cooldown_mode': cooldown_mode,
+            'waitlist_mode': waitlist_mode,
             'queue_size': waitlist.get_queue_size(),
+            'can_accept_requests': not (cooldown_mode or waitlist_mode),
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
         

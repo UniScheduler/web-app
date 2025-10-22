@@ -13,11 +13,13 @@ import SchedulerPage from "./pages/SchedulerPage";
 import ScheduleViewerPage from "./pages/ScheduleViewerPage";
 import AboutPage from "./pages/AboutPage";
 import { ScheduleProvider } from "./context/ScheduleContext";
+import { HistoryProvider } from "./context/HistoryContext";
 import "./App.css";
 
 function App() {
   return (
     <ScheduleProvider>
+      <HistoryProvider>
       <Router>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
           <Navbar />
@@ -60,6 +62,7 @@ function App() {
           />
         </div>
       </Router>
+      </HistoryProvider>
     </ScheduleProvider>
   );
 }

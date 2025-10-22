@@ -121,11 +121,14 @@ class AIProcessorThread:
             while not self.processing_queue.empty() and self.running:
                 # Check if AI processor is on cooldown
                 if self._is_on_cooldown():
-                    self.waitlist.on_waitlist = True
-                    print("AI Processor on cooldown - setting on_waitlist to True")
+                    if not self.waitlist.on_waitlist:
+                        self.waitlist.on_waitlist = True
+                        print("AI Processor on cooldown - setting on_waitlist to True")
                     break
                 else:
-                    self.waitlist.on_waitlist = False
+                    if self.waitlist.on_waitlist:
+                        self.waitlist.on_waitlist = False
+                        print("AI Processor cooldown ended - setting on_waitlist to False")
                 
                 # Get next item from queue
                 try:

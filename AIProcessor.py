@@ -93,13 +93,9 @@ class AIProcessor:
         now = datetime.datetime.now()
         time_since_quota_exhausted = now - self.last_quota_exhausted
         
-        print(f"Cooldown check: quota_error_count={self.quota_error_count}, time_since={time_since_quota_exhausted.total_seconds():.0f}s")
-        
         # First cooldown: 1 hour
         if not self.cooldown_1_hour_completed:
             if time_since_quota_exhausted.total_seconds() < 3600:  # 1 hour
-                remaining = 3600 - time_since_quota_exhausted.total_seconds()
-                print(f"Waiting for 1-hour cooldown. Remaining: {remaining/60:.1f} minutes")
                 return True
             else:
                 self.cooldown_1_hour_completed = True
@@ -109,8 +105,6 @@ class AIProcessor:
         # Second cooldown: 24 hours (only if we've had quota errors after the first cooldown)
         if self.quota_error_count > 1 and not self.cooldown_24_hour_completed:
             if time_since_quota_exhausted.total_seconds() < 86400:  # 24 hours
-                remaining = 86400 - time_since_quota_exhausted.total_seconds()
-                print(f"Waiting for 24-hour cooldown. Remaining: {remaining/3600:.1f} hours")
                 return True
             else:
                 self.cooldown_24_hour_completed = True

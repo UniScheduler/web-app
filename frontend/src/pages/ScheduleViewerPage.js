@@ -28,6 +28,7 @@ const ScheduleViewerPage = () => {
   const [progress, setProgress] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [cooldownMode, setCooldownMode] = useState(false);
+  const [waitlistMode, setWaitlistMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(true);
   const pollingIntervalRef = useRef(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -66,6 +67,7 @@ const ScheduleViewerPage = () => {
       setProgress(data.progress);
       setTimeline(data.timeline || []);
       setCooldownMode(data.cooldown_mode || false);
+      setWaitlistMode(data.waitlist_mode || false);
 
       // Check if processing is complete
       const isComplete = data.status === "done_processing" || data.status === "ai_failed" || data.status === "extraction_failed";
@@ -275,12 +277,12 @@ const ScheduleViewerPage = () => {
                 </div>
               </div>
 
-              {cooldownMode && (
+              {(cooldownMode || waitlistMode) && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                   <div className="flex items-center">
                     <ExclamationCircleIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2" />
                     <p className="text-yellow-800 dark:text-yellow-200 text-sm">
-                      Service is currently in cooldown mode. Your request will be processed when the service becomes available.
+                      Service is currently overloaded. Please wait 1 hour and try again.
                     </p>
                   </div>
                 </div>
