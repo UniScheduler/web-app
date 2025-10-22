@@ -35,7 +35,7 @@ class AIProcessorThread:
             "data": data or {}
         }
         
-        log_file = os.path.join(self.server_folder, "waitlist_logs.json")
+        log_file = os.path.join(self.server_folder, "server_logs.json")
         
         # Load existing logs
         if os.path.exists(log_file):

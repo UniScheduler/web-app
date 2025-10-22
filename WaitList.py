@@ -17,8 +17,8 @@ class WaitList:
         if not os.path.exists(self.server_folder):
             os.makedirs(self.server_folder)
         
-        # Check if waitlist.json exists
-        waitlist_file = os.path.join(self.server_folder, "waitlist.json")
+        # Check if user_data.json exists
+        waitlist_file = os.path.join(self.server_folder, "user_data.json")
         if os.path.exists(waitlist_file):
             self.from_dict(json.load(open(waitlist_file)))
         else:
@@ -56,7 +56,7 @@ class WaitList:
         return self.waitlist
     
     def save(self):
-        with open(os.path.join(self.server_folder, "waitlist.json"), "w") as f:
+        with open(os.path.join(self.server_folder, "user_data.json"), "w") as f:
             json.dump([response.to_dict() for response in self.waitlist], f)
     
     def from_dict(self, data):

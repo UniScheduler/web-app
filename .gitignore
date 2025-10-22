@@ -145,3 +145,5 @@ ai_config*.json
 server_data/
 test*
 debug_logs.json
+
+template.json
