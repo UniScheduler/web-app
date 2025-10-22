@@ -9,7 +9,7 @@ const API_HOST =
 function SchedulerForm({ onScheduleGenerated }) {
   console.log("SchedulerForm API_HOST:", API_HOST);
   const [courses, setCourses] = useState([
-    { department: "", number: "", professor: "" },
+    { department: "", number: "" },
   ]);
   const [preferences, setPreferences] = useState("");
   const [error, setError] = useState("");
@@ -89,7 +89,7 @@ function SchedulerForm({ onScheduleGenerated }) {
   };
 
   const addCourse = () => {
-    setCourses([...courses, { department: "", number: "", professor: "" }]);
+    setCourses([...courses, { department: "", number: "" }]);
   };
 
   useEffect(() => {

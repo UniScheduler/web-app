@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeftIcon,
@@ -9,6 +9,7 @@ import {
   CheckCircleIcon,
   ExclamationCircleIcon,
   XCircleIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import CalendarView from "../components/CalendarView";
 import toast from "react-hot-toast";
@@ -27,13 +28,21 @@ const ScheduleViewerPage = () => {
   const [progress, setProgress] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [cooldownMode, setCooldownMode] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(true);
+  const pollingIntervalRef = useRef(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (id) {
       checkScheduleStatus();
       // Set up polling for status updates
       const interval = setInterval(checkScheduleStatus, 3000);
-      return () => clearInterval(interval);
+      pollingIntervalRef.current = interval;
+      
+      return () => {
+        clearInterval(interval);
+        pollingIntervalRef.current = null;
+      };
     }
   }, [id]);
 
@@ -46,6 +55,8 @@ const ScheduleViewerPage = () => {
         if (response.status === 404) {
           setError("Schedule not found");
           setLoading(false);
+          setIsProcessing(false);
+          stopPolling();
           return;
         }
         throw new Error(data.error || "Failed to fetch schedule status");
@@ -56,21 +67,51 @@ const ScheduleViewerPage = () => {
       setTimeline(data.timeline || []);
       setCooldownMode(data.cooldown_mode || false);
 
-      // If processing is complete, stop polling
-      if (data.status === "done_processing" || data.status === "ai_failed" || data.status === "extraction_failed") {
+      // Check if processing is complete
+      const isComplete = data.status === "done_processing" || data.status === "ai_failed" || data.status === "extraction_failed";
+      
+      console.log('Schedule status:', data.status, 'isComplete:', isComplete, 'pollingInterval:', pollingIntervalRef.current);
+      
+      if (isComplete) {
         setLoading(false);
+        setIsProcessing(false);
+        stopPolling(); // Stop continuous polling
         if (data.schedule && data.schedule.classes) {
           generateColors(data.schedule);
         }
       } else {
         setLoading(true);
+        setIsProcessing(true);
       }
 
     } catch (error) {
       console.error("Error checking schedule status:", error);
       setError("Failed to check schedule status");
       setLoading(false);
+      setIsProcessing(false);
+      stopPolling();
     }
+  };
+
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+      console.log('Polling stopped - AI processing complete');
+    }
+  };
+
+  const startPolling = () => {
+    if (!pollingIntervalRef.current) {
+      const interval = setInterval(checkScheduleStatus, 3000);
+      pollingIntervalRef.current = interval;
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await checkScheduleStatus();
+    setIsRefreshing(false);
   };
 
   const generateColors = (schedule) => {
@@ -301,10 +342,24 @@ const ScheduleViewerPage = () => {
                 <p className="text-gray-600 dark:text-gray-400">
                   Request ID: {id}
                 </p>
+                {!isProcessing && (
+                  <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                    {isRefreshing ? 'Refreshing...' : 'Click refresh to check for updates'}
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="flex items-center space-x-2">
+              <button
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                title="Refresh schedule data"
+              >
+                <ArrowPathIcon className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
               <button
                 onClick={handleDownload}
                 className="inline-flex items-center px-4 py-2 bg-[#861F41] hover:bg-[#6B1934] text-white font-medium rounded-lg transition-colors"
@@ -367,7 +422,6 @@ const ScheduleViewerPage = () => {
                   <li>• Course conflicts with your preferences</li>
                   <li>• No available sections for selected courses</li>
                   <li>• Time constraints are too restrictive</li>
-                  <li>• Professor preferences are unavailable</li>
                 </ul>
               </div>
               <div className="mt-8 space-y-3">
@@ -402,9 +456,6 @@ const ScheduleViewerPage = () => {
                           CRN
                         </th>
                         <th className="border border-gray-300 dark:border-gray-600 p-3 text-left font-semibold text-gray-900 dark:text-white">
-                          Instructor
-                        </th>
-                        <th className="border border-gray-300 dark:border-gray-600 p-3 text-left font-semibold text-gray-900 dark:text-white">
                           Schedule
                         </th>
                         <th className="border border-gray-300 dark:border-gray-600 p-3 text-left font-semibold text-gray-900 dark:text-white">
@@ -431,11 +482,6 @@ const ScheduleViewerPage = () => {
                           <td className="border border-gray-300 dark:border-gray-600 p-3">
                             <div className="text-gray-600 dark:text-gray-400">
                               {cls.crn}
-                            </div>
-                          </td>
-                          <td className="border border-gray-300 dark:border-gray-600 p-3">
-                            <div className="text-gray-700 dark:text-gray-300">
-                              {cls.professorName}
                             </div>
                           </td>
                           <td className="border border-gray-300 dark:border-gray-600 p-3">

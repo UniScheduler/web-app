@@ -210,9 +210,6 @@ function MultipleScheduleViewer({ courses, preferences, termYear, email }) {
                         <th className="border border-gray-300 p-2 text-left bg-gray-100">
                           Location
                         </th>
-                        <th className="border border-gray-300 p-2 text-left bg-gray-100">
-                          Professor
-                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -226,9 +223,6 @@ function MultipleScheduleViewer({ courses, preferences, termYear, email }) {
                           </td>
                           <td className="border border-gray-300 p-2">
                             {cls.location}
-                          </td>
-                          <td className="border border-gray-300 p-2">
-                            {cls.professorName}
                           </td>
                         </tr>
                       ))}

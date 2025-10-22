@@ -9,7 +9,7 @@ const API_HOST =
 
 function ScheduleViewer({ schedule }) {
   const [downloadMessage, setDownloadMessage] = useState("");
-  const [viewMode, setViewMode] = useState("table"); // 'table' or 'calendar'
+  const [viewMode, setViewMode] = useState("calendar");
   const [crnColors, setCrnColors] = useState({});
 
   React.useEffect(() => {
@@ -98,16 +98,6 @@ function ScheduleViewer({ schedule }) {
         <h2 className="text-2xl text-center">Your Schedule</h2>
         <div className="flex space-x-2">
           <button
-            onClick={() => setViewMode("table")}
-            className={`px-4 py-2 rounded ${
-              viewMode === "table"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-200 text-gray-700"
-            }`}
-          >
-            Table View
-          </button>
-          <button
             onClick={() => setViewMode("calendar")}
             className={`px-4 py-2 rounded ${
               viewMode === "calendar"
@@ -116,6 +106,16 @@ function ScheduleViewer({ schedule }) {
             }`}
           >
             Calendar View
+          </button>
+          <button
+            onClick={() => setViewMode("table")}
+            className={`px-4 py-2 rounded ${
+              viewMode === "table"
+                ? "bg-blue-500 text-white"
+                : "bg-gray-200 text-gray-700"
+            }`}
+          >
+            Table View
           </button>
           <button
             onClick={handleDownloadSchedule}
@@ -142,9 +142,6 @@ function ScheduleViewer({ schedule }) {
                   Course Name
                 </th>
                 <th className="border border-gray-300 p-2 text-left bg-gray-100">
-                  Instructor
-                </th>
-                <th className="border border-gray-300 p-2 text-left bg-gray-100">
                   Time &amp; Days
                 </th>
                 <th className="border border-gray-300 p-2 text-left bg-gray-100">
@@ -162,9 +159,6 @@ function ScheduleViewer({ schedule }) {
                     </td>
                     <td className="border border-gray-300 p-2">
                       {cls.courseName}
-                    </td>
-                    <td className="border border-gray-300 p-2">
-                      {cls.professorName}
                     </td>
                     <td className="border border-gray-300 p-2">
                       {cls.time} on {cls.days}
@@ -222,10 +216,6 @@ function ScheduleViewer({ schedule }) {
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
-                          <div>
-                            <span className="font-medium">Instructor:</span>{" "}
-                            {cls.professorName}
-                          </div>
                           <div>
                             <span className="font-medium">Schedule:</span>{" "}
                             {cls.time} on {cls.days}

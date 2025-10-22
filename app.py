@@ -165,7 +165,7 @@ def log_waitlist_event(event, data=None):
         "data": data or {}
     }
     
-    log_file = os.path.join(server_folder, "waitlist_logs.json")
+    log_file = os.path.join(server_folder, "server_logs.json")
     
     # Load existing logs
     if os.path.exists(log_file):
@@ -267,11 +267,11 @@ def generate_schedule_pdf(schedule_data, inputColors):
         elements.append(Spacer(1, 12))
 
         table_data = [["Course", "Number", "CRN",
-                       "Day", "Time", "Location", "Professor"]]
+                       "Day", "Time", "Location"]]
         for cls in schedule_data:
             table_data.append([
                 cls["courseName"], cls["courseNumber"], cls["crn"],
-                cls["days"], cls["time"], cls["location"], cls["professorName"]
+                cls["days"], cls["time"], cls["location"]
             ])
 
         table = Table(table_data, repeatRows=1)
@@ -438,7 +438,7 @@ def get_request_timeline(request_uuid):
     timeline = []
     
     # Get logs for this request
-    log_file = os.path.join(server_folder, "waitlist_logs.json")
+    log_file = os.path.join(server_folder, "server_logs.json")
     if os.path.exists(log_file):
         with open(log_file, 'r') as f:
             logs = json.load(f)
@@ -535,7 +535,7 @@ def get_waitlist_status():
 def get_logs():
     """Get waitlist logs - Admin access required"""
     try:
-        log_file = os.path.join(server_folder, "waitlist_logs.json")
+        log_file = os.path.join(server_folder, "server_logs.json")
         
         if not os.path.exists(log_file):
             return jsonify({'logs': []}), 200

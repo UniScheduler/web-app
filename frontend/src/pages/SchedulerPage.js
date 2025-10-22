@@ -30,7 +30,7 @@ const SchedulerPage = () => {
   } = useSchedule();
 
   const [courses, setCourses] = useState(
-    sessionData.courses || [{ courseCode: "", professor: "" }]
+    sessionData.courses || [{ courseCode: "" }]
   );
   const [semesterOptions, setSemesterOptions] = useState([]);
   const [selectedSemester, setSelectedSemester] = useState(
@@ -166,7 +166,7 @@ const SchedulerPage = () => {
   };
 
   const addCourse = () => {
-    const newCourses = [...courses, { courseCode: "", professor: "" }];
+    const newCourses = [...courses, { courseCode: "" }];
     setCourses(newCourses);
 
     // Save to session data
@@ -195,7 +195,7 @@ const SchedulerPage = () => {
   };
 
   const handleClearForm = () => {
-    setCourses([{ courseCode: "", professor: "" }]);
+    setCourses([{ courseCode: "" }]);
     setSelectedSemester(semesterOptions[0]?.termYear || "");
     setPreferences({ schedulePreferences: "", email: "" });
     clearSessionData();
@@ -241,7 +241,6 @@ const SchedulerPage = () => {
         return {
           department,
           number,
-          professor: course.professor || "",
         };
       });
 
@@ -460,20 +459,7 @@ const SchedulerPage = () => {
                         </p>
                       )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      VT Professor (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.professor}
-                      onChange={(e) =>
-                        handleCourseChange(index, "professor", e.target.value)
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#861F41] dark:focus:ring-[#E5751F] focus:border-[#861F41] dark:focus:border-[#E5751F] dark:bg-gray-600 dark:text-white transition-colors duration-200 text-sm"
-                      placeholder="e.g., Dr. Smith"
-                    />
-                  </div>
+                  
                   {courses.length > 1 && (
                     <button
                       type="button"

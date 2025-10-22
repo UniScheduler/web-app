@@ -230,6 +230,10 @@ class AIProcessorThread:
                 # Handle both string and dictionary preferences
                 if isinstance(response.preferences, dict):
                     for key, value in response.preferences.items():
+                        # Skip any instructor/professor related keys
+                        key_lower = str(key).lower()
+                        if "prof" in key_lower or "instructor" in key_lower:
+                            continue
                         prompt_parts.append(f"- {key}: {value}")
                 elif isinstance(response.preferences, str) and response.preferences.strip():
                     prompt_parts.append(f"- {response.preferences}")

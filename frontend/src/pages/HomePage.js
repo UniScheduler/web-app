@@ -24,12 +24,6 @@ const HomePage = () => {
         "Automatically detects and prevents scheduling conflicts for Virginia Tech courses, ensuring a seamless academic experience.",
     },
     {
-      icon: UserGroupIcon,
-      title: "Professor Preferences",
-      description:
-        "Specify your preferred VT professors and let our system prioritize them in your schedule.",
-    },
-    {
       icon: CheckCircleIcon,
       title: "Real-time Validation",
       description:

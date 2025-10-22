@@ -225,13 +225,12 @@ class AIProcessor:
                             "crn": {"type": "string"},
                             "courseNumber": {"type": "string"},
                             "courseName": {"type": "string"},
-                            "professorName": {"type": "string"},
                             "days": {"type": "string"},
                             "time": {"type": "string"},
                             "location": {"type": "string"},
                             "isLab": {"type": "boolean"}
                         },
-                        "required": ["crn", "courseNumber", "courseName", "professorName", "days", "time", "location"]
+                        "required": ["crn", "courseNumber", "courseName", "days", "time", "location"]
                     }
                 }
             },
@@ -265,12 +264,11 @@ class AIProcessor:
                                 type=genai.types.Type.ARRAY,
                                 items=genai.types.Schema(
                                     type=genai.types.Type.OBJECT,
-                                    required=["crn", "courseNumber", "courseName", "professorName", "days", "time", "location"],
+                                    required=["crn", "courseNumber", "courseName", "days", "time", "location"],
                                     properties={
                                         "crn": genai.types.Schema(type=genai.types.Type.STRING),
                                         "courseNumber": genai.types.Schema(type=genai.types.Type.STRING),
                                         "courseName": genai.types.Schema(type=genai.types.Type.STRING),
-                                        "professorName": genai.types.Schema(type=genai.types.Type.STRING),
                                         "days": genai.types.Schema(type=genai.types.Type.STRING),
                                         "time": genai.types.Schema(type=genai.types.Type.STRING),
                                         "location": genai.types.Schema(type=genai.types.Type.STRING),
@@ -295,7 +293,6 @@ Input:
     - CRN (Course Reference Number)
     - Course Code
     - Course Name
-    - Instructor Name
     - Schedule Type (Lecture, Lab, etc.)
     - Days (e.g., M, T, W, R, F)
     - Start Time and End Time
@@ -304,7 +301,7 @@ Input:
 Special Handling for "* Additional Times *":
 - Some sections may include rows labeled "* Additional Times *".
 - These rows contain the actual **meeting days, time, and location**, but are missing other fields.
-- If an entry is marked as "* Additional Times *", fetch the full course details (Course Code, Name, Instructor, etc.) from the matching CRN's main section.
+- If an entry is marked as "* Additional Times *", fetch the full course details (Course Code, Name, etc.) from the matching CRN's main section.
 - Treat these as valid class time blocks and combine them with the main row to form the complete schedule.
 
 🚨 SUPER STRICT RULES (MUST NEVER BE BROKEN):
@@ -331,14 +328,13 @@ Special Handling for "* Additional Times *":
 14. If no valid schedule is possible after trying all combinations, return "NO_VALID_SCHEDULE_FOUND"
 
 ✨ Preferences (only if all strict rules are satisfied):
-- Prefer professors mentioned by the user
 - Prefer morning or afternoon classes, if specified
 - Prioritize classes with cleaner or fewer blocks
 
 ✅ Output Format:
 If a valid, fully non-overlapping timetable is possible, return it in this format (one row per time block):
 
-CRN    Course    Course Name    Instructor    Day    Start Time - End Time    Location
+CRN    Course    Course Name    Day    Start Time - End Time    Location
 
 - One row per day — if a class meets on M/W/F, generate three separate rows
 - Use 12-hour format (e.g., 9:30AM - 10:45AM)

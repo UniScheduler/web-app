@@ -31,12 +31,6 @@ const AboutPage = () => {
         "Get your optimized Virginia Tech schedule in seconds with our efficient real-time processing system that fetches live VT course data.",
     },
     {
-      icon: UserGroupIcon,
-      title: "Professor Preferences",
-      description:
-        "Specify your preferred Virginia Tech professors and let our system prioritize them when creating your schedule.",
-    },
-    {
       icon: ChartBarIcon,
       title: "Smart Analytics",
       description:

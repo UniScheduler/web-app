@@ -32,8 +32,9 @@ class AIResponse:
             cleaned_data = self.get_clean_course_data()
             for course_code, df in cleaned_data.items():
                 if df is not None and not df.empty:
-                    course_timetable_serializable[course_code] = df.to_dict(
-                        'records')
+                    # Drop instructor column if present before serializing
+                    df_no_instructor = df.drop(columns=['Instructor'], errors='ignore')
+                    course_timetable_serializable[course_code] = df_no_instructor.to_dict('records')
                 else:
                     course_timetable_serializable[course_code] = []
 

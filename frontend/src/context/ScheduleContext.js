@@ -12,7 +12,7 @@ const initialState = {
     email: "",
   },
   sessionData: {
-    courses: [{ department: "", number: "", professor: "" }],
+    courses: [{ department: "", number: "" }],
     semester: "",
   },
 };
@@ -51,7 +51,7 @@ const scheduleReducer = (state, action) => {
       return {
         ...state,
         sessionData: {
-          courses: [{ department: "", number: "", professor: "" }],
+          courses: [{ department: "", number: "" }],
           semester: "",
         },
       };
